@@ -28,8 +28,9 @@ data class GlobalConfig(
 
     var consoleMessage: MutableState<ConsoleMessage> = mutableStateOf(ConsoleMessage("En attente de données...", ConsoleMessageType.INFO)),
     var currentProfile: MutableState<ProspectData?> = mutableStateOf(null),
-    var isLoggedIn: MutableState<Boolean> = mutableStateOf(false),
 
+    var isLoggedIn: MutableState<Boolean> = mutableStateOf(false),
+    var availableSheets: MutableState<List<Pair<String, String>>> = mutableStateOf(emptyList()),
     var googleSheetsId: MutableState<String> = mutableStateOf(""),
     var sheetsFileName: MutableState<String> = mutableStateOf(""),
 

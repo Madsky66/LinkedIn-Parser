@@ -32,7 +32,17 @@ class GoogleSheetsManager {
 
     suspend fun selectGoogleSheetsFile(sheetsId: String) {
         gC.isImportationLoading.value = true
-        try {}
+        try {
+            if (!GoogleSheetsHelper.checkSheetAccess(sheetsId)) {
+                gC.consoleMessage.value = ConsoleMessage("❌ Impossible d'accéder à cette feuille Google Sheets", ConsoleMessageType.ERROR)
+                return
+            }
+            val sheetName = GoogleSheetsHelper.getSheetName(sheetsId)
+            gC.googleSheetsId.value = sheetsId
+            gC.sheetsFileName.value = sheetName
+            AppDataManager.saveAppData()
+            gC.consoleMessage.value = ConsoleMessage("✅ Feuille Google Sheets \"$sheetName\" sélectionnée avec succès", ConsoleMessageType.SUCCESS)
+        }
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de l'importation du fichier Google Sheets : ${e.message}", ConsoleMessageType.ERROR)}
         finally {gC.isImportationLoading.value = false}
     }

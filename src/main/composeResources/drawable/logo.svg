@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+    <defs>
+        <linearGradient id="bgGradient4" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#1976D2"/>
+            <stop offset="100%" style="stop-color:#09167a"/>
+        </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="200" height="200" rx="100" fill="url(#bgGradient4)"/>
+    <g transform="translate(100,100)">
+        <!-- Cercle extérieur -->
+        <circle cx="0" cy="0" r="98" stroke="white" stroke-width="3" fill="none"/>
+        <!-- Loupe (centrée dans le cercle principal) -->
+        <g transform="translate(15,-15) scale(0.85)">
+            <!-- Cercle de la loupe -->
+            <circle cx="0" cy="0" r="50" stroke="white" stroke-width="10" fill="#0288D1"/>
+            <!-- Ombre intérieure -->
+            <circle cx="0" cy="0" r="42" fill="none" stroke="blue" stroke-width="5" opacity="0.1"/>
+            <!-- Logo "In" centré dans le cercle de la loupe -->
+            <g transform="translate(0,18) scale(0.9)"><path d="M26,2 L15.315625,2 L15.315625,-16.1978851 C15.315625,-21.1872458 13.4197917,-23.9754677 9.4707031,-23.9754677 C5.1746094,-23.9754677 2.9300781,-21.0738897 2.9300781,-16.1978851 L2.9300781,2 L-7.3666667,2 L-7.3666667,-32.6666667 L2.9300781,-32.6666667 L2.9300781,-27.9970717 C2.9300781,-27.9970717 6.0260417,-33.7257849 13.3825521,-33.7257849 C20.7356771,-33.7257849 26,-29.2355295 26,-19.948788 L26,2 Z M-19.650651,-37.2059867 C-23.1579427,-37.2059867 -26,-40.0703433 -26,-43.6029933 C-26,-47.1356434 -23.1579427,-50 -19.650651,-50 C-16.1433594,-50 -13.3029948,-47.1356434 -13.3029948,-43.6029933 C-13.3029948,-40.0703433 -16.1433594,-37.2059867 -19.650651,-37.2059867 Z M-24.9674479,2 L-14.230599,2 L-14.230599,-32.6666667 L-24.9674479,-32.6666667 L-24.9674479,2 Z" fill="#FFF"/></g>
+            <!-- Manche de la loupe -->
+            <line x1="-40" y1="40" x2="-70" y2="70" stroke="white" stroke-width="20" stroke-linecap="round"/>
+        </g>
+    </g>
+</svg>
+

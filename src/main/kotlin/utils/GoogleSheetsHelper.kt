@@ -18,7 +18,7 @@ object GoogleSheetsHelper {
     private val JSON_FACTORY = GsonFactory.getDefaultInstance()
     private val SCOPES = listOf(SheetsScopes.SPREADSHEETS, DriveScopes.DRIVE_METADATA_READONLY)
     private const val TOKENS_DIRECTORY_PATH = "tokens"
-    private const val CLIENT_SECRET_FILE_PATH = "src/main/resources/file/client_secret.json"
+    private const val CLIENT_SECRET_FILE_PATH = "src/main/composeResources/file/client_secret.json"
     private const val LOCAL_SERVER_PORT = 8888
     private var sheetsService: Sheets? = null
     private var driveService: Drive? = null
@@ -51,6 +51,13 @@ object GoogleSheetsHelper {
         val receiver = com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()
         try {gC.consoleMessage.value = ConsoleMessage("⏳ Ouverture du navigateur pour l'authentification Google Sheets...", ConsoleMessageType.INFO); return@withContext AuthorizationCodeInstalledApp(flow, receiver).authorize("user")}
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de l'authentification Google Sheets : ${e.message}", ConsoleMessageType.ERROR); throw e}
+    }
+
+    suspend fun loadAvailableSheets() {
+        gC.isImportationLoading.value = true
+        try {gC.availableSheets.value = listAvailableSheets()}
+        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors du chargement des feuilles : ${e.message}", ConsoleMessageType.ERROR)}
+        finally {gC.isImportationLoading.value = false}
     }
 
     suspend fun listAvailableSheets(): List<Pair<String, String>> = withContext(Dispatchers.IO) {

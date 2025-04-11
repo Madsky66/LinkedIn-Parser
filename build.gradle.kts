@@ -75,7 +75,7 @@ compose.desktop {
             windows {
                 menuGroup = "LinkedInParser"
                 shortcut = true
-                iconFile.set(project.file("src/main/resources/drawable/icon.ico"))
+                iconFile.set(project.file("src/main/composeResources/drawable/icon.ico"))
                 upgradeUuid = "938f329d-3585-430d-bbca-304ff14f3dda"
                 dirChooser = true
                 perUserInstall = true
@@ -83,7 +83,7 @@ compose.desktop {
 
             fromFiles(
 //                "src/jvmMain/composeResources/LICENSE.txt",
-                "src/main/resources/drawable/icon.ico",
+                "src/main/composeResources/drawable/icon.ico",
                 "src/main/resources/file/client_secret.json"
             )
             description = "LinkedIn Profile Scraper"
@@ -92,4 +92,9 @@ compose.desktop {
 //            licenseFile.set(project.file("src/main/resources/LICENSE.txt"))
         }
     }
+}
+
+compose.resources {
+    publicResClass = true
+    generateResClass = auto
 }

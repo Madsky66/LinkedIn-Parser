@@ -17,17 +17,13 @@ import ui.composable.app.StatusBar
 import ui.composable.modal.SettingsModal
 import ui.composable.modal.SheetsPickerModal
 import utils.*
+import utils.GoogleSheetsHelper.loadAvailableSheets
 
 fun main() = application {
     val applicationScope: CoroutineScope = rememberCoroutineScope()
     var windowState by remember {mutableStateOf(WindowState(size = DpSize(600.dp, 250.dp)))}
-
     val darkGray = gC.darkGray.value
     val middleGray = gC.middleGray.value
-
-    var sheetId by remember {mutableStateOf("")}
-    var availableSheets by remember {mutableStateOf<List<Pair<String, String>>>(emptyList())}
-    var isLoadingSheets by remember {mutableStateOf(false)}
 
     LaunchedEffect(Unit) {AppDataManager.applyAppData()}
     LaunchedEffect(gC.isDarkTheme.value) {gC.updateThemeColors()}
@@ -47,14 +43,15 @@ fun main() = application {
     if (gC.showSettingsModal.value) {SettingsModal(applicationScope) {gC.showSettingsModal.value = false}}
     // Modale de sélection de feuille Google Sheets
     if (gC.showSheetsModal.value) {
+        LaunchedEffect(Unit) {loadAvailableSheets()}
         SheetsPickerModal(
-            spreadsheets = availableSheets,
-            onFileSelected = {id -> sheetId = id; gC.showSheetsModal.value = false},
+            spreadsheets = gC.availableSheets.value,
+            onFileSelected = {id -> applicationScope.launch {gC.googleSheetsManager.selectGoogleSheetsFile(id); gC.showSheetsModal.value = false}},
             onCreateNew = {title ->
                 applicationScope.launch {
                     try {
                         val newId = GoogleSheetsHelper.createNewSheet(title)
-                        sheetId = newId
+                        gC.googleSheetsManager.selectGoogleSheetsFile(newId)
                         gC.showSheetsModal.value = false
                     }
                     catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la création de la feuille: ${e.message}", ConsoleMessageType.ERROR)}

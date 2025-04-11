@@ -24,29 +24,53 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
     val middleGray = gC.middleGray.value
     val lightGray = gC.lightGray.value
 
-    suspend fun onAddProfile() {
-        if (gC.googleSheetsId.value.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("❌ Veuillez d'abord sélectionner une feuille Google Sheets", ConsoleMessageType.ERROR); return}
-        val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-        var clipboardContent = ""
-        // Boucles de détection de la page de profil
-        gC.isExtractionLoading.value = true
-        bot().changeApp()
-        if (!bot().detect(clipboard) {clipboardContent = it.toString()}) {gC.isExtractionLoading.value = false; return}
-        else {gC.consoleMessage.value = ConsoleMessage("✅ Page de profil détectée et correctement chargée", ConsoleMessageType.SUCCESS)}
-        bot().changeApp()
-        // Démarrage de l'analyse du texte
-        gC.consoleMessage.value = ConsoleMessage("⏳ Analyse des données en cours...", ConsoleMessageType.INFO)
-        gC.profileParser.processInput(applicationScope, clipboardContent)
-        // Ajout au fichier Google Sheets
-        gC.isExportationLoading.value = true
-        gC.consoleMessage.value = ConsoleMessage("⏳ Synchronisation en cours...", ConsoleMessageType.INFO)
-        gC.googleSheetsManager.addLineToGoogleSheets()
-        gC.isExportationLoading.value = false
+    suspend fun onAddButtonClic() {
+        if (gC.googleSheetsId.value.isNotEmpty()) {
+            val clipboard = Toolkit.getDefaultToolkit().systemClipboard
+            var clipboardContent = ""
+            // Boucles de détection de la page de profil
+            gC.isExtractionLoading.value = true
+            bot().changeApp()
+            if (!bot().detect(clipboard) {clipboardContent = it.toString()}) {gC.isExtractionLoading.value = false; return}
+            else {gC.consoleMessage.value = ConsoleMessage("✅ Page de profil détectée et correctement chargée", ConsoleMessageType.SUCCESS)}
+            bot().changeApp()
+            // Démarrage de l'analyse du texte
+            gC.consoleMessage.value = ConsoleMessage("⏳ Analyse des données en cours...", ConsoleMessageType.INFO)
+            gC.profileParser.processInput(applicationScope, clipboardContent)
+            // Ajout au fichier Google Sheets
+            gC.isExportationLoading.value = true
+            gC.consoleMessage.value = ConsoleMessage("⏳ Synchronisation en cours...", ConsoleMessageType.INFO)
+            gC.googleSheetsManager.addLineToGoogleSheets()
+            gC.isExportationLoading.value = false
+        }
+        else {
+            if (!gC.isLoggedIn.value) {
+                try {
+                    // Implémenter la connexion en un clic
+                }
+                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Connexion au compte Google impossible [$e]", ConsoleMessageType.ERROR)}
+            }
+            else {
+                gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR)
+                return
+            }
+        }
     }
 
-    fun onSwapFile() {
-        gC.consoleMessage.value = ConsoleMessage("⏳ En attente de sélection d'un fichier", ConsoleMessageType.INFO)
-        gC.showSheetsModal.value = true
+    fun onGoogleButtonClic() {
+        if (gC.googleSheetsId.value.isNotEmpty()) {
+            gC.consoleMessage.value = ConsoleMessage("⏳ En attente de sélection d'un fichier", ConsoleMessageType.INFO)
+            gC.showSheetsModal.value = true
+        }
+        else {
+            if (!gC.isLoggedIn.value) {
+                try {
+                    // Implémenter la connexion en un clic
+                }
+                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Connexion au compte Google impossible [$e]", ConsoleMessageType.ERROR)}
+            }
+            else {gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR)}
+        }
     }
 
     var sheetsFileName = if (gC.sheetsFileName.value != "") {gC.sheetsFileName.value} else {"Aucun fichier chargé"}
@@ -56,12 +80,12 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(100)).background(darkGray).padding(5.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
         Row(Modifier.padding(5.dp), Arrangement.End, Alignment.CenterVertically) {
             // Bouton de changement de fichier
-            Card({onSwapFile()}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {Color(0xFF34A853)} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
-                Icon(Icons.Filled.AttachFile, "", Modifier.size(50.dp).padding(10.dp), tint = lightGray)
+            Card({onGoogleButtonClic()}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {Color(0xFF34A853)} else {darkGray}, contentColor = Color.White, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
+                Icon(Icons.Filled.AttachFile, "Google Sheets", Modifier.size(50.dp).padding(10.dp), tint = Color.White)
             }
             Spacer(Modifier.width(5.dp))
             // Bouton d'ajout Google Sheets
-            Card({applicationScope.launch {onAddProfile()}}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {middleGray} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
+            Card({applicationScope.launch {onAddButtonClic()}}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {middleGray} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
                 Icon(Icons.Filled.Add, "", Modifier.size(50.dp).padding(10.dp), tint = lightGray)
             }
         }
