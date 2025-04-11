@@ -44,6 +44,10 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
         gC.showSheetsModal.value = true
     }
 
+    var sheetsFileName = if (gC.sheetsFileName.value != "") {gC.sheetsFileName.value} else {"Aucun fichier chargé"}
+
+    Row(Modifier) {Text("Source Google Sheets : $sheetsFileName", color = lightGray)}
+    Spacer(Modifier.height(10.dp))
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(100)).background(darkGray).padding(5.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
         Row(Modifier.padding(5.dp), Arrangement.End, Alignment.CenterVertically) {
             // Bouton de changement de fichier
@@ -55,8 +59,6 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
             Card({applicationScope.launch {onAddProfile()}}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {middleGray} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
                 Icon(Icons.Filled.Add, "", Modifier.size(50.dp).padding(10.dp), tint = lightGray)
             }
-            Spacer(Modifier.width(10.dp))
-            Row(Modifier) {Text("Fichier GoogleSheets chargé : "/*$sheetsFileName"*/, color = lightGray)}
         }
         Spacer(Modifier.height(10.dp))
         Box(Modifier.size(50.dp).clip(RoundedCornerShape(100)).background(gC.darkGray.value).padding(10.dp), Alignment.Center) {Icon(Icons.Filled.AddToDrive, "", tint = gC.lightGray.value)}
