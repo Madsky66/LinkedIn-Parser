@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.*
 import config.GlobalInstance.config as gC
@@ -24,19 +25,23 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
     val lightGray = gC.lightGray.value
 
     suspend fun onAddProfile() {
+        if (gC.googleSheetsId.value.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("❌ Veuillez d'abord sélectionner une feuille Google Sheets", ConsoleMessageType.ERROR); return}
         val clipboard = Toolkit.getDefaultToolkit().systemClipboard
         var clipboardContent = ""
         // Boucles de détection de la page de profil
+        gC.isExtractionLoading.value = true
         bot().changeApp()
-        if (!bot().detect(clipboard) {clipboardContent = it.toString()}) {println("test"); return}
+        if (!bot().detect(clipboard) {clipboardContent = it.toString()}) {gC.isExtractionLoading.value = false; return}
         else {gC.consoleMessage.value = ConsoleMessage("✅ Page de profil détectée et correctement chargée", ConsoleMessageType.SUCCESS)}
         bot().changeApp()
         // Démarrage de l'analyse du texte
         gC.consoleMessage.value = ConsoleMessage("⏳ Analyse des données en cours...", ConsoleMessageType.INFO)
-        gC.linkedinManager.processInput(applicationScope, clipboardContent)
+        gC.profileParser.processInput(applicationScope, clipboardContent)
         // Ajout au fichier Google Sheets
+        gC.isExportationLoading.value = true
         gC.consoleMessage.value = ConsoleMessage("⏳ Synchronisation en cours...", ConsoleMessageType.INFO)
-        gC.googleSheetsManager.exportToGoogleSheets()
+        gC.googleSheetsManager.addLineToGoogleSheets()
+        gC.isExportationLoading.value = false
     }
 
     fun onSwapFile() {
@@ -51,7 +56,7 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(100)).background(darkGray).padding(5.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
         Row(Modifier.padding(5.dp), Arrangement.End, Alignment.CenterVertically) {
             // Bouton de changement de fichier
-            Card({onSwapFile()}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {middleGray} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
+            Card({onSwapFile()}, Modifier, !gC.isAppBusy.value, RoundedCornerShape(100), backgroundColor = if (!gC.isAppBusy.value) {Color(0xFF34A853)} else {darkGray}, contentColor = lightGray, border = BorderStroke(1.dp, darkGray), elevation = 10.dp) {
                 Icon(Icons.Filled.AttachFile, "", Modifier.size(50.dp).padding(10.dp), tint = lightGray)
             }
             Spacer(Modifier.width(5.dp))

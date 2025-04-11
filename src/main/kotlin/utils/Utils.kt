@@ -4,8 +4,6 @@ import androidx.compose.material.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.window.DialogState
-import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowState
 import manager.AppDataManager
 import kotlin.system.exitProcess

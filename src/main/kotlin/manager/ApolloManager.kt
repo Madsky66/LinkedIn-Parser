@@ -11,6 +11,13 @@ class ApolloManager {
     private val client = OkHttpClient()
     private val userAgentProvider = UserAgentManager()
 
+    fun validateApolloApiKey(apiKey: String): Boolean {
+        if (apiKey.isBlank()) return false
+        val client = OkHttpClient()
+        val request = Request.Builder().url("https://api.apollo.io/api/v1/auth/health").addHeader("accept", "application/json").addHeader("Cache-Control", "no-cache").addHeader("Content-Type", "application/json").addHeader("x-api-key", apiKey).build()
+        return try {client.newCall(request).execute().use {response -> response.isSuccessful}} catch (e: Exception) {false}
+    }
+
     fun enrichProfileData(firstName: String, lastName: String, company: String, jobTitle: String, email: String): ProspectData {
         if (firstName.isBlank() || firstName == "Prénom inconnu" || lastName.isBlank() || lastName == "Nom de famille inconnu") {return ProspectData(company, "$firstName $lastName", firstName, "", lastName, jobTitle, email, "", "", emptyList())}
         val apolloData = fetchApolloData(firstName, lastName, company)

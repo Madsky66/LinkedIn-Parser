@@ -2,7 +2,6 @@ package config
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
-import config.GlobalInstance.config
 import data.ProspectData
 import manager.*
 import utils.*
@@ -14,8 +13,9 @@ data class GlobalConfig(
     var middleGray: MutableState<Color> = mutableStateOf<Color>(Color.DarkGray),
     var lightGray: MutableState<Color> = mutableStateOf<Color>(Color.LightGray),
 
-    val linkedinManager: ProfileParser = ProfileParser(),
     val googleSheetsManager: GoogleSheetsManager = GoogleSheetsManager(),
+    val apolloManager: ApolloManager = ApolloManager(),
+    val profileParser: ProfileParser = ProfileParser(),
 
     var showSettingsModal: MutableState<Boolean> = mutableStateOf(false),
     var showConfirmModal: MutableState<Boolean> = mutableStateOf(false),

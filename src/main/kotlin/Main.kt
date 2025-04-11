@@ -22,15 +22,26 @@ fun main() = application {
     val applicationScope: CoroutineScope = rememberCoroutineScope()
     var windowState by remember {mutableStateOf(WindowState(size = DpSize(600.dp, 250.dp)))}
 
-    LaunchedEffect(Unit) {AppDataManager.applyAppData()}
-    LaunchedEffect(gC.isDarkTheme.value) {gC.updateThemeColors()}
-
     val darkGray = gC.darkGray.value
     val middleGray = gC.middleGray.value
 
     var sheetId by remember {mutableStateOf("")}
     var availableSheets by remember {mutableStateOf<List<Pair<String, String>>>(emptyList())}
     var isLoadingSheets by remember {mutableStateOf(false)}
+
+    LaunchedEffect(Unit) {AppDataManager.applyAppData()}
+    LaunchedEffect(gC.isDarkTheme.value) {gC.updateThemeColors()}
+    LaunchedEffect(gC.isExtractionLoading.value, gC.isImportationLoading.value, gC.isExportationLoading.value) {gC.isAppBusy.value = gC.isExtractionLoading.value || gC.isImportationLoading.value || gC.isExportationLoading.value}
+    LaunchedEffect(gC.googleSheetsId.value) {
+        if (gC.googleSheetsId.value.isNotEmpty()) {
+            try {
+                val name = GoogleSheetsHelper.getSheetName(gC.googleSheetsId.value)
+                gC.sheetsFileName.value = name
+            }
+            catch (e: Exception) {gC.sheetsFileName.value = "Fichier inconnu"}
+        }
+        else {gC.sheetsFileName.value = ""}
+    }
 
     // Modale des paramètres
     if (gC.showSettingsModal.value) {SettingsModal(applicationScope) {gC.showSettingsModal.value = false}}
@@ -42,7 +53,7 @@ fun main() = application {
             onCreateNew = {title ->
                 applicationScope.launch {
                     try {
-                        val newId = GoogleSheetsHelper.createNewSpreadsheet(title)
+                        val newId = GoogleSheetsHelper.createNewSheet(title)
                         sheetId = newId
                         gC.showSheetsModal.value = false
                     }

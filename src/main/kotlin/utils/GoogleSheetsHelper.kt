@@ -18,7 +18,7 @@ object GoogleSheetsHelper {
     private val JSON_FACTORY = GsonFactory.getDefaultInstance()
     private val SCOPES = listOf(SheetsScopes.SPREADSHEETS, DriveScopes.DRIVE_METADATA_READONLY)
     private const val TOKENS_DIRECTORY_PATH = "tokens"
-    private const val CLIENT_SECRET_FILE_PATH = "src/jvmMain/composeResources/file/client_secret.json"
+    private const val CLIENT_SECRET_FILE_PATH = "src/main/resources/file/client_secret.json"
     private const val LOCAL_SERVER_PORT = 8888
     private var sheetsService: Sheets? = null
     private var driveService: Drive? = null
@@ -53,7 +53,7 @@ object GoogleSheetsHelper {
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de l'authentification Google Sheets : ${e.message}", ConsoleMessageType.ERROR); throw e}
     }
 
-    suspend fun listAvailableSpreadsheets(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun listAvailableSheets(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         try {
             val driveService = getDriveService()
             val result = driveService.files().list().setQ("mimeType='application/vnd.google-apps.spreadsheet'").setFields("files(id, name)").execute()
@@ -62,7 +62,7 @@ object GoogleSheetsHelper {
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la récupération des feuilles : ${e.message}", ConsoleMessageType.ERROR); throw e}
     }
 
-    suspend fun createNewSpreadsheet(title: String): String = withContext(Dispatchers.IO) {
+    suspend fun createNewSheet(title: String): String = withContext(Dispatchers.IO) {
         val service = getSheetsService()
         val spreadsheet = com.google.api.services.sheets.v4.model.Spreadsheet().setProperties(com.google.api.services.sheets.v4.model.SpreadsheetProperties().setTitle(title))
         val response = service.spreadsheets().create(spreadsheet).execute()
@@ -71,6 +71,15 @@ object GoogleSheetsHelper {
         val body = com.google.api.services.sheets.v4.model.ValueRange().setValues(headers)
         service.spreadsheets().values().update(sheetId, "A1", body).setValueInputOption("RAW").execute()
         return@withContext sheetId
+    }
+
+    suspend fun getSheetName(spreadsheetId: String): String = withContext(Dispatchers.IO) {
+        try {
+            val service = getSheetsService()
+            val spreadsheet = service.spreadsheets().get(spreadsheetId).execute()
+            return@withContext spreadsheet.properties.title
+        }
+        catch (e: Exception) {return@withContext ""}
     }
 
     suspend fun checkSheetAccess(spreadsheetId: String): Boolean = withContext(Dispatchers.IO) {

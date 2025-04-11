@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.*
+import manager.AppDataManager
 import ui.composable.effect.CustomOutlinedTextFieldColors
 import config.GlobalInstance.config as gC
 import utils.*
@@ -37,8 +38,13 @@ fun ApolloKeyModule(applicationScope: CoroutineScope) {
                     gC.consoleMessage.value = ConsoleMessage("⏳ Validation de la clé API par Apollo en cours...", ConsoleMessageType.INFO)
                     try {
                         // <--- Vérifier la validité de la clé ici
-                        delay(500) // Simulation de la validation
-                        gC.consoleMessage.value = ConsoleMessage("✅ La clé API a bien été validée par Apollo", ConsoleMessageType.SUCCESS)
+                        val isValid = gC.apolloManager.validateApolloApiKey(gC.pastedApiKey.value)
+                        if (isValid) {
+                            gC.apiKey.value = gC.pastedApiKey.value
+                            AppDataManager.saveAppData()
+                            gC.consoleMessage.value = ConsoleMessage("✅ La clé API a bien été validée par Apollo", ConsoleMessageType.SUCCESS)
+                        }
+                        else {gC.consoleMessage.value = ConsoleMessage("❌ Clé API Apollo invalide", ConsoleMessageType.ERROR)}
                     }
                     catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la validation de la clé API par Apollo : ${e.message}", ConsoleMessageType.ERROR)}
                     isApolloValidationLoading = false
