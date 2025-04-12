@@ -1,126 +1,168 @@
 package utils
 
 import com.google.api.client.auth.oauth2.Credential
-import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp
+import com.google.api.client.extensions.java6.auth.oauth2.*
+import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver
+import com.google.api.client.googleapis.auth.oauth2.*
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
 import com.google.api.client.util.store.FileDataStoreFactory
-import config.GlobalInstance.config as gC
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver
-import com.google.api.client.googleapis.auth.oauth2.*
 import com.google.api.services.drive.*
 import com.google.api.services.sheets.v4.*
+import com.google.api.services.sheets.v4.model.*
+import config.GlobalInstance.config as gC
 import kotlinx.coroutines.*
+import kotlinx.coroutines.sync.*
 import java.io.*
 import java.security.GeneralSecurityException
+import java.io.Serializable
 
 object GoogleSheetsHelper {
     private const val APPLICATION_NAME = "LinkedInScraper"
     private val JSON_FACTORY = GsonFactory.getDefaultInstance()
-    private val SCOPES = listOf(SheetsScopes.SPREADSHEETS, DriveScopes.DRIVE_METADATA_READONLY)
-    private const val TOKENS_DIRECTORY_PATH = "tokens"
-    private const val CLIENT_SECRET_FILE_PATH = "src/main/composeResources/files/client_secret.json"
+    private val SCOPES = listOf(SheetsScopes.SPREADSHEETS, DriveScopes.DRIVE_READONLY)
+    private val TOKENS_DIRECTORY_PATH = File(System.getProperty("user.home"), ".LinkedInScraper/tokens").absolutePath
+    private const val CREDENTIALS_FILE_PATH = "/files/client_secret.json"
     private const val LOCAL_SERVER_PORT = 8888
-    private var sheetsService: Sheets? = null
-    private var driveService: Drive? = null
-
-    suspend fun login(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-            val credential = getCredentials(httpTransport)
-            if (credential != null) {
-                gC.isLoggedIn.value = true
-                return@withContext true
-            }
-            false
+    private val httpTransport: NetHttpTransport by lazy {GoogleNetHttpTransport.newTrustedTransport()}
+    private val credentialManager: CredentialManager by lazy {
+        val clientSecretInputStream = GoogleSheetsHelper::class.java.getResourceAsStream(CREDENTIALS_FILE_PATH) ?: throw FileNotFoundException("Fichier credentials introuvable: $CREDENTIALS_FILE_PATH")
+        clientSecretInputStream.use {inputStream ->
+            val clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, InputStreamReader(inputStream))
+            val dataStoreFactory = FileDataStoreFactory(File(TOKENS_DIRECTORY_PATH))
+            CredentialManager(httpTransport, clientSecrets, dataStoreFactory)
         }
-        catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'entrée/sortie lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); false}
-        catch (e: GeneralSecurityException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur de sécurité lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); false}
-        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur inconnue lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); false}
+    }
+
+    @Volatile private var sheetsService: Sheets? = null
+    @Volatile private var driveService: Drive? = null
+
+    private val serviceInitMutex = Mutex()
+
+    private class CredentialManager(
+        private val transport: NetHttpTransport,
+        private val clientSecrets: GoogleClientSecrets,
+        private val dataStoreFactory: FileDataStoreFactory
+    ) {
+        @Volatile private var currentCredential: Credential? = null
+        suspend fun getCredential(): Credential = withContext(Dispatchers.IO) {
+            currentCredential?.let {
+                if ((it.expiresInSeconds ?: 0) > 60) {return@withContext it}
+                else if (it.refreshToken != null) {
+                    try {it.refreshToken(); return@withContext it}
+                    catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Échec du rafraîchissement du token: ${e.message}", ConsoleMessageType.WARNING)}
+                }
+            }
+            val loadedCredential = loadExistingCredential()
+            if (loadedCredential != null) {currentCredential = loadedCredential; return@withContext loadedCredential}
+            val flow = GoogleAuthorizationCodeFlow.Builder(transport, JSON_FACTORY, clientSecrets, SCOPES).setDataStoreFactory(dataStoreFactory).setAccessType("offline").build()
+            val receiver = LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()
+            try {
+                gC.consoleMessage.value = ConsoleMessage("⏳ Ouverture du navigateur pour l'authentification Google...", ConsoleMessageType.INFO)
+                val newCredential = AuthorizationCodeInstalledApp(flow, receiver).authorize("user") // "user" est l'ID utilisateur pour le DataStore
+                currentCredential = newCredential // Met à jour le cache mémoire
+                gC.consoleMessage.value = ConsoleMessage("✅ Authentification Google réussie.", ConsoleMessageType.SUCCESS)
+                return@withContext newCredential
+            }
+            catch (e: Exception) {
+                val errorMessage = "❌ Erreur lors de l'authentification Google : ${e.message}"
+                gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR)
+                throw IOException("Échec de l'autorisation Google", e) // Propage l'erreur
+            }
+        }
+
+        private fun loadExistingCredential(): Credential? {
+            return try {
+                val flow = GoogleAuthorizationCodeFlow.Builder(transport, JSON_FACTORY, clientSecrets, SCOPES).setDataStoreFactory(dataStoreFactory).setAccessType("offline").build()
+                val credential = flow.loadCredential("user")
+                credential?.takeIf {(it.accessToken != null && (it.expiresInSeconds ?: 0) > 60) || it.refreshToken != null}
+
+            }
+            catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur accès tokens stockés: ${e.message}", ConsoleMessageType.WARNING); null}
+        }
+
+        fun clearCredentials() {
+            currentCredential = null
+            val dataStoreDir = File(TOKENS_DIRECTORY_PATH)
+            if (dataStoreDir.exists()) {
+                try {
+                    val dataStore = dataStoreFactory.getDataStore<Serializable>("user")
+                    dataStore.clear()
+                    gC.consoleMessage.value = ConsoleMessage("ℹ️ Tokens d'authentification Google effacés.", ConsoleMessageType.INFO)
+                }
+                catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur lors de la suppression des tokens : ${e.message}", ConsoleMessageType.WARNING)}
+            }
+        }
+    }
+
+    suspend fun login(): Boolean {
+        return try {credentialManager.getCredential(); gC.isLoggedIn.value = true; true}
+        catch (e: IOException) {gC.isLoggedIn.value = false; false}
+        catch (e: GeneralSecurityException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur de sécurité lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); gC.isLoggedIn.value = false; false}
+        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur inconnue lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); gC.isLoggedIn.value = false; false}
     }
 
     suspend fun logout() = withContext(Dispatchers.IO) {
-        val tokensDir = File(TOKENS_DIRECTORY_PATH)
-        if (tokensDir.exists()) tokensDir.deleteRecursively()
-        gC.isLoggedIn.value = false
-        gC.googleSheetsId.value = ""
+        credentialManager.clearCredentials()
         sheetsService = null
         driveService = null
+        gC.isLoggedIn.value = false
+        gC.googleSheetsId.value = ""
+        gC.sheetsFileName.value = ""
+        gC.availableSheets.value = emptyList()
     }
 
     suspend fun getSheetsService(): Sheets = withContext(Dispatchers.IO) {
-        if (sheetsService == null) {
-            val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-            val credentials = getCredentials(httpTransport)
-            sheetsService = Sheets.Builder(httpTransport, JSON_FACTORY, credentials).setApplicationName(APPLICATION_NAME).build()
-        }
-        sheetsService!!
+        sheetsService?.let {return@withContext it}
+        return@withContext serviceInitMutex.withLock {sheetsService ?: run {
+            val credential = credentialManager.getCredential()
+            Sheets.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build().also {sheetsService = it}
+        }}
     }
 
-    private suspend fun getDriveService(): Drive = withContext(Dispatchers.IO) {
-        if (driveService == null) {
-            val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
-            val credentials = getCredentials(httpTransport)
-            driveService = Drive.Builder(httpTransport, JSON_FACTORY, credentials).setApplicationName(APPLICATION_NAME).build()
-        }
-        driveService!!
+    suspend fun getDriveService(): Drive = withContext(Dispatchers.IO) {
+        driveService?.let {return@withContext it}
+        return@withContext serviceInitMutex.withLock {driveService ?: run {
+            val credential = credentialManager.getCredential()
+            Drive.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build().also {driveService = it}
+        }}
     }
 
-    private suspend fun getCredentials(httpTransport: NetHttpTransport): Credential = withContext(Dispatchers.IO) {
-        val clientSecretFile = File(CLIENT_SECRET_FILE_PATH)
-        if (!clientSecretFile.exists()) {val errorMessage = "Fichier client_secret introuvable : $CLIENT_SECRET_FILE_PATH"; gC.consoleMessage.value = ConsoleMessage("❌ $errorMessage", ConsoleMessageType.ERROR); throw FileNotFoundException(errorMessage)}
-        val clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, InputStreamReader(FileInputStream(clientSecretFile)))
-        val flow = GoogleAuthorizationCodeFlow.Builder(httpTransport, JSON_FACTORY, clientSecrets, SCOPES).setDataStoreFactory(FileDataStoreFactory(File(TOKENS_DIRECTORY_PATH))).setAccessType("offline").build()
-        val credential = flow.loadCredential("user")
-        if (credential != null && credential.refreshToken != null) {return@withContext credential}
-        val receiver = LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()
-        try {gC.consoleMessage.value = ConsoleMessage("⏳ Ouverture du navigateur pour l'authentification Google Sheets...", ConsoleMessageType.INFO); return@withContext AuthorizationCodeInstalledApp(flow, receiver).authorize("user")}
-        catch (e: Exception) {val errorMessage = "❌ Erreur lors de l'authentification Google Sheets : ${e.message}"; gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR); throw Exception(errorMessage, e)}
-    }
-
-    suspend fun loadAvailableSheets() {
-        gC.isImportationLoading.value = true
-        try {gC.availableSheets.value = listAvailableSheets()}
-        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors du chargement des feuilles : ${e.message}", ConsoleMessageType.ERROR); throw e}
-        finally {gC.isImportationLoading.value = false}
-    }
-
-    suspend fun listAvailableSheets(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun findSpreadsheets(): List<Pair<String, String>>? = withContext(Dispatchers.IO) {
         try {
-            val driveService = getDriveService()
-            val result = driveService.files().list().setQ("mimeType='application/vnd.google-apps.spreadsheet'").setFields("files(id, name)").execute()
-            return@withContext result.files.map {it.id to it.name}
+            val service = getDriveService()
+            val result = service.files().list().setQ("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false").setFields("files(id, name)").setOrderBy("name").execute()
+            result.files?.mapNotNull {it.id to it.name} ?: emptyList()
         }
-        catch (e: Exception) {val errorMessage = "❌ Erreur lors de la récupération des feuilles : ${e.message}"; gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR); throw Exception(errorMessage, e)}
+        catch (e: Exception) {val errorMessage = "❌ Erreur lors de la récupération des feuilles Google Sheets: ${e.message}"; gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR); null}
     }
 
-    suspend fun createNewSheet(title: String): String = withContext(Dispatchers.IO) {
-        val service = getSheetsService()
-        val spreadsheet = com.google.api.services.sheets.v4.model.Spreadsheet().setProperties(com.google.api.services.sheets.v4.model.SpreadsheetProperties().setTitle(title))
-        val response = service.spreadsheets().create(spreadsheet).execute()
-        val sheetId = response.spreadsheetId
-        val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
-        val body = com.google.api.services.sheets.v4.model.ValueRange().setValues(headers)
-        service.spreadsheets().values().update(sheetId, "A1", body).setValueInputOption("RAW").execute()
-        return@withContext sheetId
-    }
-
-    suspend fun getSheetName(spreadsheetId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun createNewSheet(title: String): String? = withContext(Dispatchers.IO) {
         try {
             val service = getSheetsService()
-            val spreadsheet = service.spreadsheets().get(spreadsheetId).execute()
-            return@withContext spreadsheet.properties.title
+            val spreadsheet = Spreadsheet().setProperties(SpreadsheetProperties().setTitle(title))
+            val initialSheet = Sheet().setProperties(SheetProperties().setTitle("Prospects"))
+            spreadsheet.sheets = listOf(initialSheet)
+            val response = service.spreadsheets().create(spreadsheet).execute()
+            val sheetId = response.spreadsheetId
+            val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN")) // En-têtes standards
+            val headerBody = ValueRange().setValues(headers)
+            service.spreadsheets().values().update(sheetId, "Prospects!A1", headerBody).setValueInputOption("RAW").execute()
+            gC.consoleMessage.value = ConsoleMessage("✅ Feuille '$title' créée avec succès.", ConsoleMessageType.SUCCESS)
+            return@withContext sheetId
+
         }
-        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la récupération du nom de la feuille : ${e.message}", ConsoleMessageType.ERROR); return@withContext null}
+        catch (e: Exception) {
+            val errorMessage = "❌ Erreur lors de la création de la feuille '$title': ${e.message}"
+            gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR)
+            return@withContext null
+        }
     }
 
-    suspend fun checkSheetAccess(spreadsheetId: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val service = getSheetsService()
-            service.spreadsheets().get(spreadsheetId).execute()
-            return@withContext true
-        }
-        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la vérification de l'accès à la feuille : ${e.message}", ConsoleMessageType.ERROR); return@withContext false}
+    suspend fun getSheetMetadata(spreadsheetId: String): Spreadsheet? = withContext(Dispatchers.IO) {
+        if (spreadsheetId.isBlank()) return@withContext null
+        try {val service = getSheetsService(); service.spreadsheets().get(spreadsheetId).setFields("properties.title,sheets.properties.title").execute()}
+        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur récupération métadonnées ($spreadsheetId): ${e.message}", ConsoleMessageType.ERROR); null}
     }
 }

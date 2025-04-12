@@ -9,9 +9,9 @@ import utils.*
 data class GlobalConfig(
     var isDarkTheme: MutableState<Boolean> = mutableStateOf(true),
     val themeColors: Colors = Colors(),
-    var darkGray: MutableState<Color> = mutableStateOf<Color>(Color(0xFF2A2A2A)),
-    var middleGray: MutableState<Color> = mutableStateOf<Color>(Color.DarkGray),
-    var lightGray: MutableState<Color> = mutableStateOf<Color>(Color.LightGray),
+    var darkGray: MutableState<Color> = mutableStateOf(Color(0xFF2A2A2A)),
+    var middleGray: MutableState<Color> = mutableStateOf(Color.DarkGray),
+    var lightGray: MutableState<Color> = mutableStateOf(Color.LightGray),
 
     val googleSheetsManager: GoogleSheetsManager = GoogleSheetsManager(),
     val apolloManager: ApolloManager = ApolloManager(),
@@ -24,9 +24,9 @@ data class GlobalConfig(
     var isExtractionLoading: MutableState<Boolean> = mutableStateOf(false),
     var isImportationLoading: MutableState<Boolean> = mutableStateOf(false),
     var isExportationLoading: MutableState<Boolean> = mutableStateOf(false),
-    var isAppBusy: MutableState<Boolean> = mutableStateOf(isExtractionLoading.value || isImportationLoading.value || isExportationLoading.value),
+    val isAppBusy: State<Boolean> = derivedStateOf {isExtractionLoading.value || isImportationLoading.value || isExportationLoading.value},
 
-    var consoleMessage: MutableState<ConsoleMessage> = mutableStateOf(ConsoleMessage("En attente de données...", ConsoleMessageType.INFO)),
+    var consoleMessage: MutableState<ConsoleMessage> = mutableStateOf(ConsoleMessage("", ConsoleMessageType.INFO)),
     var currentProfile: MutableState<ProspectData?> = mutableStateOf(null),
 
     var isLoggedIn: MutableState<Boolean> = mutableStateOf(false),
