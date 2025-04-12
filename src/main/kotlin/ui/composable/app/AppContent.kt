@@ -57,12 +57,10 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
 
     fun onGoogleButtonClic() {
         if (gC.googleSheetsId.value.isNotEmpty()) {
-            println("1")
             gC.consoleMessage.value = ConsoleMessage("⏳ En attente de sélection d'un fichier", ConsoleMessageType.INFO)
             gC.showSheetsModal.value = true
         }
         else {
-            println("2")
             if (!gC.isLoggedIn.value) {
                 try {applicationScope.launch {if (GoogleSheetsHelper.login()) {gC.showSheetsModal.value = true}}}
                 catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Connexion au compte Google impossible [$e]", ConsoleMessageType.ERROR)}
