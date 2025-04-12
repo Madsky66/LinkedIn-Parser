@@ -39,7 +39,7 @@ class GoogleSheetsManager {
             }
             val sheetName = GoogleSheetsHelper.getSheetName(sheetsId)
             gC.googleSheetsId.value = sheetsId
-            gC.sheetsFileName.value = sheetName
+            gC.sheetsFileName.value = sheetName.toString()
             AppDataManager.saveAppData()
             gC.consoleMessage.value = ConsoleMessage("✅ Feuille Google Sheets \"$sheetName\" sélectionnée avec succès", ConsoleMessageType.SUCCESS)
         }

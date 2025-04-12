@@ -32,7 +32,7 @@ fun main() = application {
         if (gC.googleSheetsId.value.isNotEmpty()) {
             try {
                 val name = GoogleSheetsHelper.getSheetName(gC.googleSheetsId.value)
-                gC.sheetsFileName.value = name
+                gC.sheetsFileName.value = name.toString()
             }
             catch (e: Exception) {gC.sheetsFileName.value = "Fichier inconnu"}
         }
