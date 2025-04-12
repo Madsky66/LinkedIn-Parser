@@ -26,6 +26,7 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
 
     suspend fun onAddButtonClic() {
         if (gC.googleSheetsId.value.isNotEmpty()) {
+            println("1")
             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
             var clipboardContent = ""
             // Boucles de détection de la page de profil
@@ -45,12 +46,12 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
         }
         else {
             if (!gC.isLoggedIn.value) {
-                try {
-                    // Implémenter la connexion en un clic
-                }
+                println("2")
+                try {applicationScope.launch {if (GoogleSheetsHelper.login()) {gC.showSheetsModal.value = true}}}
                 catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Connexion au compte Google impossible [$e]", ConsoleMessageType.ERROR)}
             }
             else {
+                println("3")
                 gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR)
                 return
             }
@@ -59,17 +60,20 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
 
     fun onGoogleButtonClic() {
         if (gC.googleSheetsId.value.isNotEmpty()) {
+            println("1")
             gC.consoleMessage.value = ConsoleMessage("⏳ En attente de sélection d'un fichier", ConsoleMessageType.INFO)
             gC.showSheetsModal.value = true
         }
         else {
+            println("2")
             if (!gC.isLoggedIn.value) {
-                try {
-                    // Implémenter la connexion en un clic
-                }
+                try {applicationScope.launch {if (GoogleSheetsHelper.login()) {gC.showSheetsModal.value = true}}}
                 catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Connexion au compte Google impossible [$e]", ConsoleMessageType.ERROR)}
             }
-            else {gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR)}
+            else {
+                gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR)
+                return
+            }
         }
     }
 

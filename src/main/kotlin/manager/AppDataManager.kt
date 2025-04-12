@@ -9,9 +9,7 @@ import config.GlobalInstance.config as gC
 data class AppParameters(
     val isDarkTheme: Boolean = false,
     val locale: String = "fr",
-    val apiKey: String = "",
-    val lastExportPath: String = "",
-    val lastExportFileName: String = ""
+    val apiKey: String = ""
 )
 
 @Serializable

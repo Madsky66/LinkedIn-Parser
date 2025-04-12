@@ -17,8 +17,9 @@ import androidx.compose.ui.window.*
 import com.madsky.linkedinscraper.generated.resources.Res
 import com.madsky.linkedinscraper.generated.resources.google_logo
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import org.jetbrains.compose.resources.vectorResource
+import utils.GoogleSheetsHelper
 import config.GlobalInstance.config as gC
 
 @Composable
@@ -26,6 +27,7 @@ fun SettingsModal(applicationScope: CoroutineScope, onDismiss: () -> Unit) {
     val dialogState = rememberDialogState(size = DpSize(500.dp, 500.dp))
 
     fun onLogOut() {
+        applicationScope.launch {GoogleSheetsHelper.logout()}
         gC.isLoggedIn.value = false
     }
 

@@ -23,6 +23,28 @@ object GoogleSheetsHelper {
     private var sheetsService: Sheets? = null
     private var driveService: Drive? = null
 
+    suspend fun login(): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
+            val credential = getCredentials(httpTransport)
+            if (credential != null) {
+                gC.isLoggedIn.value = true
+                return@withContext true
+            }
+            false
+        }
+        catch (e: Exception) {false}
+    }
+
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        val tokensDir = File(TOKENS_DIRECTORY_PATH)
+        if (tokensDir.exists()) tokensDir.deleteRecursively()
+        gC.isLoggedIn.value = false
+        gC.googleSheetsId.value = ""
+        sheetsService = null
+        driveService = null
+    }
+
     suspend fun getSheetsService(): Sheets = withContext(Dispatchers.IO) {
         if (sheetsService == null) {
             val httpTransport = GoogleNetHttpTransport.newTrustedTransport()
