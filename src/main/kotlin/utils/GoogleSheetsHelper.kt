@@ -151,7 +151,6 @@ object GoogleSheetsHelper {
             service.spreadsheets().values().update(sheetId, "Prospects!A1", headerBody).setValueInputOption("RAW").execute()
             gC.consoleMessage.value = ConsoleMessage("✅ Feuille '$title' créée avec succès.", ConsoleMessageType.SUCCESS)
             return@withContext sheetId
-
         }
         catch (e: Exception) {
             val errorMessage = "❌ Erreur lors de la création de la feuille '$title': ${e.message}"
