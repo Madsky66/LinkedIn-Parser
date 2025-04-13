@@ -13,6 +13,7 @@ data class GlobalConfig(
     var middleGray: MutableState<Color> = mutableStateOf(Color.DarkGray),
     var lightGray: MutableState<Color> = mutableStateOf(Color.LightGray),
 
+    val appDataManager: AppDataManager = AppDataManager,
     val googleSheetsManager: GoogleSheetsManager = GoogleSheetsManager(),
     val apolloManager: ApolloManager = ApolloManager(),
     val profileParser: ProfileParser = ProfileParser(),

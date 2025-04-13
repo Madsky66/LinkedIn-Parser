@@ -26,11 +26,7 @@ data class AppData(
 
 object AppDataManager {
     private const val APP_DATA_FILENAME = "app_data.json"
-    private val json = Json {
-        prettyPrint = true
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json = Json {prettyPrint = true; ignoreUnknownKeys = true; encodeDefaults = true}
 
     fun saveAppData() {
         try {
@@ -53,13 +49,7 @@ object AppDataManager {
 
     fun loadAppData(): AppData {
         val file = File(APP_DATA_FILENAME)
-        return try {
-            if (file.exists()) {
-                val jsonData = file.readText()
-                json.decodeFromString(AppData.serializer(), jsonData)
-            }
-            else {AppData()}
-        }
+        return try {if (file.exists()) {val jsonData = file.readText(); json.decodeFromString(AppData.serializer(), jsonData)} else {AppData()}}
         catch (e: Exception) {AppData()}
     }
 
@@ -73,11 +63,7 @@ object AppDataManager {
     }
 
     fun updateTheme(isDarkTheme: Boolean) {
-        try {
-            gC.isDarkTheme.value = isDarkTheme
-            updateThemeColors()
-            saveAppData()
-        }
+        try {gC.isDarkTheme.value = isDarkTheme; updateThemeColors(); saveAppData()}
         catch (e: Exception) {println("Error updating isDarkTheme: ${e.message}")}
     }
 

@@ -4,15 +4,9 @@ import androidx.compose.material.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.window.WindowState
-import manager.AppDataManager
-import kotlin.system.exitProcess
 
 data class ConsoleMessage(val message: String, val type: ConsoleMessageType)
 enum class ConsoleMessageType {INFO, SUCCESS, ERROR, WARNING}
-
-fun onMinimizeWindow(windowState: WindowState) {windowState.isMinimized = true}
-fun onCloseApp() {AppDataManager.saveAppData(); exitProcess(0)}
 
 class Colors {
     private val darkThemeColors = listOf(
