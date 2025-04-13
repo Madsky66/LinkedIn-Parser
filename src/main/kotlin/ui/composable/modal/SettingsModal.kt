@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle.Companion.Italic
 import androidx.compose.ui.unit.*
 import androidx.compose.ui.window.*
 import com.madsky.linkedinscraper.generated.resources.Res
@@ -46,9 +47,9 @@ fun SettingsModal(applicationScope: CoroutineScope, onDismiss: () -> Unit) {
                 Spacer(Modifier.height(10.dp))
                 // Clé API Apollo
                 Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(0, 0, 0, 0)).background(middleGray).padding(20.dp), Arrangement.Center, Alignment.CenterHorizontally) {
-                    Text("Apollo.io > Admin settings > Integrations > API > API Keys", color = lightGray)
-                    Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth()) {ApolloKeyModule(applicationScope)}
+                    Spacer(Modifier.height(10.dp))
+                    Text("Apollo.io > Admin settings > Integrations > API > API Keys", fontSize = 12.sp, fontStyle = Italic, color = lightGray.copy(0.5f))
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth().border(BorderStroke(1.dp, darkGray)).padding(20.dp, 10.dp), Arrangement.SpaceBetween) {
                         val text = if (gC.apiKey.value.isBlank()) {"Aucune clé validée"} else {gC.apiKey.value}
