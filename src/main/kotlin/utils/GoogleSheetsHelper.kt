@@ -60,8 +60,8 @@ object GoogleSheetsHelper {
             val receiver = LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()
             try {
                 gC.consoleMessage.value = ConsoleMessage("⏳ Ouverture du navigateur pour l'authentification Google...", ConsoleMessageType.INFO)
-                val newCredential = AuthorizationCodeInstalledApp(flow, receiver).authorize("user") // "user" est l'ID utilisateur pour le DataStore
-                currentCredential = newCredential // Met à jour le cache mémoire
+                val newCredential = AuthorizationCodeInstalledApp(flow, receiver).authorize("user")
+                currentCredential = newCredential
                 gC.consoleMessage.value = ConsoleMessage("✅ Authentification Google réussie.", ConsoleMessageType.SUCCESS)
                 return@withContext newCredential
             }
@@ -146,7 +146,7 @@ object GoogleSheetsHelper {
             spreadsheet.sheets = listOf(initialSheet)
             val response = service.spreadsheets().create(spreadsheet).execute()
             val sheetId = response.spreadsheetId
-            val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN")) // En-têtes standards
+            val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
             val headerBody = ValueRange().setValues(headers)
             service.spreadsheets().values().update(sheetId, "Prospects!A1", headerBody).setValueInputOption("RAW").execute()
             gC.consoleMessage.value = ConsoleMessage("✅ Feuille '$title' créée avec succès.", ConsoleMessageType.SUCCESS)
