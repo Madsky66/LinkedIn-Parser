@@ -31,8 +31,9 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
 
     suspend fun ensureSheetSelectedOrPrompt() {
         if (!isLoggedIn) {
-            if (GoogleSheetsHelper.login()) {gC.googleSheetsManager.refreshAvailableSheets(); gC.showSheetsModal.value = true; gC.consoleMessage.value = ConsoleMessage("️✅ Connecté au compte Google.", ConsoleMessageType.INFO)}
-            else {gC.consoleMessage.value = ConsoleMessage("❌ Échec de la connexion Google.", ConsoleMessageType.ERROR)}
+            gC.consoleMessage.value = ConsoleMessage("⏳ Tentative de connexion à Google...", ConsoleMessageType.INFO)
+            if (GoogleSheetsHelper.login()) {gC.googleSheetsManager.refreshAvailableSheets(); gC.showSheetsModal.value = true; gC.consoleMessage.value = ConsoleMessage("️✅ Connecté au compte Google.", ConsoleMessageType.SUCCESS)}
+            else {if (gC.googleSheetsManager.checkCredentialsFileExists()) {gC.consoleMessage.value = ConsoleMessage("❌ Échec de la connexion Google.", ConsoleMessageType.ERROR)}}
         }
         else {gC.googleSheetsManager.refreshAvailableSheets(); gC.showSheetsModal.value = true}
     }
@@ -40,21 +41,16 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
     suspend fun onAddButtonClick() {
         if (googleSheetsId.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("❌ Aucune feuille Google Sheets sélectionnée", ConsoleMessageType.ERROR); ensureSheetSelectedOrPrompt(); return}
         gC.isExtractionLoading.value = true; gC.isExportationLoading.value = true
-        var clipboardContent: String? = null
+        var clipboardContent: String = ""
         try {
             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
-            // Boucles de détection de la page de profil
-            if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {clipboardContent = clipboard.getData(DataFlavor.stringFlavor) as? String}
-            if (clipboardContent.isNullOrBlank()) {gC.consoleMessage.value = ConsoleMessage("❌ Presse-papiers vide ou contenu non textuel.", ConsoleMessageType.ERROR); return}
+            if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {clipboardContent = clipboard.getData(DataFlavor.stringFlavor) as String}
             bot().changeApp()
-            if (!bot().detect(clipboard) {}) {gC.consoleMessage.value = ConsoleMessage("❌ Page de profil non détectée ou erreur de détection.", ConsoleMessageType.ERROR); return}
+            if (!bot().detect(clipboard) {clipboardContent = it}) {gC.consoleMessage.value = ConsoleMessage("❌ Page de profil non détectée ou erreur de détection.", ConsoleMessageType.ERROR); return}
             bot().changeApp()
-            // Démarrage de l'analyse du texte
             gC.consoleMessage.value = ConsoleMessage("⏳ Analyse du profil en cours...", ConsoleMessageType.INFO)
             gC.profileParser.processInput(applicationScope, clipboardContent)
-            // Ajout au fichier Google Sheets
             if (gC.currentProfile.value == null) {gC.consoleMessage.value = ConsoleMessage("❌ Aucune donnée de profil extraite.", ConsoleMessageType.ERROR); return}
-            // Ajout au fichier Google Sheets
             gC.consoleMessage.value = ConsoleMessage("⏳ Synchronisation Google Sheets en cours...", ConsoleMessageType.INFO)
             gC.googleSheetsManager.addLineToGoogleSheets()
 
