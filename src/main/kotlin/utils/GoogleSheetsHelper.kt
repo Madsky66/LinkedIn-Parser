@@ -23,81 +23,78 @@ import java.nio.file.*
 
 object GoogleSheetsHelper {
     private const val APPLICATION_NAME = "LinkedInScraper"
+    private val DEFAULT_HEADERS = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
     private val JSON_FACTORY = GsonFactory.getDefaultInstance()
     private val SCOPES = listOf(SheetsScopes.SPREADSHEETS, DriveScopes.DRIVE_READONLY)
     private val APP_DATA_DIR = Paths.get(System.getProperty("user.home"), ".LinkedInScraper")
-    private val TOKENS_DIRECTORY_PATH = APP_DATA_DIR.resolve("tokens").toString()
+    private val TOKENS_DIRECTORY = APP_DATA_DIR.resolve("tokens").toString()
     private const val LOCAL_SERVER_PORT = 8888
-    private val httpTransport: NetHttpTransport by lazy {try {GoogleNetHttpTransport.newTrustedTransport()} catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du transport HTTP: ${e.message}", ConsoleMessageType.ERROR); throw e}}
+    private val httpTransport: NetHttpTransport by lazy {try {GoogleNetHttpTransport.newTrustedTransport()} catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du transport HTTP : ${e.message}", ConsoleMessageType.ERROR); return@lazy NetHttpTransport()}}
     private val credentialManager: CredentialManager by lazy {
-        try {Files.createDirectories(Paths.get(TOKENS_DIRECTORY_PATH))}
-        catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Impossible de créer le dossier de tokens: ${e.message}", ConsoleMessageType.WARNING)}
+        try {Files.createDirectories(Paths.get(TOKENS_DIRECTORY))}
+        catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("❌ Impossible de créer le dossier de tokens : ${e.message}", ConsoleMessageType.WARNING)}
         val clientSecrets = runBlocking {findClientSecrets()}
-        val dataStoreFactory = FileDataStoreFactory(File(TOKENS_DIRECTORY_PATH))
+        val dataStoreFactory = FileDataStoreFactory(File(TOKENS_DIRECTORY))
         CredentialManager(httpTransport, clientSecrets, dataStoreFactory)
     }
 
     @OptIn(ExperimentalResourceApi::class)
-    private suspend fun findClientSecrets(): GoogleClientSecrets {
-        try {val bytes = Res.readBytes("files/client_secret.json"); return GoogleClientSecrets.load(JSON_FACTORY, InputStreamReader(bytes.inputStream()))}
-        catch (e: Exception) {throw FileNotFoundException("Erreur lors de la lecture de client_secret.json: ${e.message}")}
-    }
-
+    private suspend fun findClientSecrets(): GoogleClientSecrets? = runCatching {val bytes = Res.readBytes("files/client_secret.json"); GoogleClientSecrets.load(JSON_FACTORY, InputStreamReader(bytes.inputStream()))}.onFailure {gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de la lecture de client_secret.json: ${it.message}", ConsoleMessageType.ERROR)}.getOrNull()
     @Volatile private var sheetsService: Sheets? = null
     @Volatile private var driveService: Drive? = null
-
     private val serviceInitMutex = Mutex()
 
     private class CredentialManager(
         private val transport: NetHttpTransport,
-        private val clientSecrets: GoogleClientSecrets,
+        private val clientSecrets: GoogleClientSecrets?,
         private val dataStoreFactory: FileDataStoreFactory
     ) {
         @Volatile private var currentCredential: Credential? = null
 
-        suspend fun getCredential(): Credential = withContext(Dispatchers.IO) {
-            currentCredential?.let {cred ->
-                if ((cred.expiresInSeconds ?: 0) > 60) return@withContext cred
-                if (cred.refreshToken != null) try {cred.refreshToken(); gC.consoleMessage.value = ConsoleMessage("✅ Token Google rafraîchi avec succès", ConsoleMessageType.INFO); return@withContext cred } catch (e: IOException) { gC.consoleMessage.value = ConsoleMessage("⚠️ Échec du rafraîchissement du token: ${e.message}", ConsoleMessageType.WARNING) }
-            }
-            val flow = GoogleAuthorizationCodeFlow.Builder(transport, JSON_FACTORY, clientSecrets, SCOPES).setDataStoreFactory(dataStoreFactory).setAccessType("offline").setApprovalPrompt("force").build()
-            try {
-                flow.loadCredential("user")?.let {cred ->
-                    if ((cred.expiresInSeconds ?: 0) > 60) {currentCredential = cred; return@withContext cred }
-                    if (cred.refreshToken != null) try {cred.refreshToken(); gC.consoleMessage.value = ConsoleMessage("✅ Token Google rafraîchi avec succès", ConsoleMessageType.INFO); currentCredential = cred; return@withContext cred } catch (e: IOException) { gC.consoleMessage.value = ConsoleMessage("⚠️ Échec du rafraîchissement du token: ${e.message}", ConsoleMessageType.WARNING); clearCredentials() }
-                }
-            }
-            catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur accès tokens stockés: ${e.message}", ConsoleMessageType.WARNING)}
+        private fun getValidOrRefreshed(cred: Credential, source: String): Credential? {
+            if ((cred.expiresInSeconds ?: 0) > 60) return cred
+            if (cred.refreshToken == null) return null
+            return try {cred.refreshToken(); cred}
+            catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("❌ Échec du rafraîchissement du token ($source) : ${e.message}", ConsoleMessageType.WARNING); null}
+        }
+
+        suspend fun getCredential(): Credential? = withContext(Dispatchers.IO) {
+            currentCredential?.let {cachedCred -> getValidOrRefreshed(cachedCred, "cache")?.let {return@withContext it}}
+            val flow = GoogleAuthorizationCodeFlow.Builder(transport, JSON_FACTORY, clientSecrets, SCOPES).setDataStoreFactory(dataStoreFactory).setAccessType("offline").build()
+            var loadedCred: Credential? = null
+            try {loadedCred = flow.loadCredential("user")}
+            catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur accès tokens stockés: ${e.message}", ConsoleMessageType.WARNING)}
+            loadedCred?.let {loaded -> getValidOrRefreshed(loaded, "storage")?.let {validLoaded -> currentCredential = validLoaded; return@withContext validLoaded}; if (loaded.refreshToken != null) {clearCredentials()}}
             try {
                 gC.consoleMessage.value = ConsoleMessage("⏳ Ouverture du navigateur pour l'authentification Google...", ConsoleMessageType.INFO)
-                val newCredential = AuthorizationCodeInstalledApp(flow, LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()).authorize("user")
+                val receiver = LocalServerReceiver.Builder().setPort(LOCAL_SERVER_PORT).build()
+                val newCredential = AuthorizationCodeInstalledApp(flow, receiver).authorize("user")
                 currentCredential = newCredential
                 gC.consoleMessage.value = ConsoleMessage("✅ Authentification Google réussie.", ConsoleMessageType.SUCCESS)
                 return@withContext newCredential
             }
             catch (e: Exception) {
-                gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de l'authentification Google : ${e.message}", ConsoleMessageType.ERROR)
-                throw IOException("Échec de l'autorisation Google", e)
+                val errorMsg = e.message ?: "Erreur inconnue"
+                gC.consoleMessage.value = ConsoleMessage("❌ Erreur lors de l'authentification Google : $errorMsg", ConsoleMessageType.ERROR)
+                return@withContext null
             }
         }
 
         fun clearCredentials() {
             currentCredential = null
-            val dataStoreDir = File(TOKENS_DIRECTORY_PATH)
-            if (dataStoreDir.exists()) {
-                try {
-                    val dataStore = dataStoreFactory.getDataStore<Serializable>("user")
-                    dataStore.clear()
-                    gC.consoleMessage.value = ConsoleMessage("ℹ️ Tokens d'authentification Google effacés.", ConsoleMessageType.INFO)
-                }
-                catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur lors de la suppression des tokens : ${e.message}", ConsoleMessageType.WARNING)}
+            try {
+                val dataStore = dataStoreFactory.getDataStore<Serializable>("user")
+                if (!dataStore.isEmpty) {dataStore.clear()}
             }
+            catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur lors de la suppression des tokens : ${e.message}", ConsoleMessageType.WARNING)}
+            catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("⚠️ Erreur inattendue lors de la suppression des tokens : ${e.message}", ConsoleMessageType.WARNING)}
+
         }
     }
 
     suspend fun login(): Boolean {
         return try {credentialManager.getCredential(); gC.isLoggedIn.value = true; true}
-        catch (e: IOException) {gC.isLoggedIn.value = false; false}
+        catch (e: IOException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'écriture lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); gC.isLoggedIn.value = false; false}
         catch (e: GeneralSecurityException) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur de sécurité lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); gC.isLoggedIn.value = false; false}
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur inconnue lors de la connexion : ${e.message}", ConsoleMessageType.ERROR); gC.isLoggedIn.value = false; false}
     }
@@ -110,25 +107,25 @@ object GoogleSheetsHelper {
         gC.googleSheetsId.value = ""
         gC.sheetsFileName.value = ""
         gC.availableSheets.value = emptyList()
-        gC.consoleMessage.value = ConsoleMessage("ℹ️ Déconnecté de Google", ConsoleMessageType.INFO)
+        gC.consoleMessage.value = ConsoleMessage("✅ Compte Google déconnecté avec succés.", ConsoleMessageType.INFO)
     }
 
-    suspend fun getSheetsService(): Sheets = withContext(Dispatchers.IO) {
+    suspend fun getSheetsService(): Sheets? = withContext(Dispatchers.IO) {
         sheetsService?.let {return@withContext it}
         return@withContext serviceInitMutex.withLock {
             sheetsService ?: run {
                 try {val credential = credentialManager.getCredential(); Sheets.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build().also {sheetsService = it}}
-                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du service Sheets: ${e.message}", ConsoleMessageType.ERROR); throw e}
+                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du service Sheets : ${e.message}", ConsoleMessageType.ERROR); return@withContext null}
             }
         }
     }
 
-    suspend fun getDriveService(): Drive = withContext(Dispatchers.IO) {
+    suspend fun getDriveService(): Drive? = withContext(Dispatchers.IO) {
         driveService?.let {return@withContext it}
         return@withContext serviceInitMutex.withLock {
             driveService ?: run {
-                try {val credential = credentialManager.getCredential();Drive.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build().also {driveService = it}}
-                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du service Drive: ${e.message}", ConsoleMessageType.ERROR); throw e}
+                try {val credential = credentialManager.getCredential(); Drive.Builder(httpTransport, JSON_FACTORY, credential).setApplicationName(APPLICATION_NAME).build().also {driveService = it}}
+                catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur d'initialisation du service Drive : ${e.message}", ConsoleMessageType.ERROR); return@withContext null}
             }
         }
     }
@@ -136,13 +133,13 @@ object GoogleSheetsHelper {
     suspend fun findSpreadsheets(): List<Pair<String, String>>? = withContext(Dispatchers.IO) {
         try {
             val service = getDriveService()
-            val result = service.files().list().setQ("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false").setFields("files(id, name)").setOrderBy("name").execute()
-            val sheets = result.files?.mapNotNull {it.id to it.name} ?: emptyList()
-            if (sheets.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("ℹ️ Aucune feuille Google Sheets trouvée dans votre compte", ConsoleMessageType.INFO)}
-            else {gC.consoleMessage.value = ConsoleMessage("✅ ${sheets.size} feuilles Google Sheets trouvées", ConsoleMessageType.SUCCESS)}
+            val result = service?.files()?.list()?.setQ("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")?.setFields("files(id, name)")?.setOrderBy("name")?.execute()
+            val sheets = result?.files?.mapNotNull {it.id to it.name} ?: emptyList()
+            if (sheets.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("ℹ⚠\uFE0F Aucune feuille Google Sheets trouvée", ConsoleMessageType.INFO)}
+            else {gC.consoleMessage.value = ConsoleMessage("✅ ${sheets.size} feuille(s) Google Sheets trouvée(s)", ConsoleMessageType.SUCCESS)}
             return@withContext sheets
         }
-        catch (e: Exception) {val errorMessage = "❌ Erreur lors de la récupération des feuilles Google Sheets: ${e.message}";  gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR);  null}
+        catch (e: Exception) {val errorMessage = "❌ Erreur lors de la récupération des feuilles Google Sheets: ${e.message}"; gC.consoleMessage.value = ConsoleMessage(errorMessage, ConsoleMessageType.ERROR); null}
     }
 
     suspend fun createNewSheet(title: String): String? = withContext(Dispatchers.IO) {
@@ -153,11 +150,11 @@ object GoogleSheetsHelper {
             val initialSheet = Sheet().setProperties(SheetProperties().setTitle("Prospects"))
             spreadsheet.sheets = listOf(initialSheet)
             gC.consoleMessage.value = ConsoleMessage("⏳ Création de la feuille '$title'...", ConsoleMessageType.INFO)
-            val response = service.spreadsheets().create(spreadsheet).execute()
-            val sheetId = response.spreadsheetId
-            val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
+            val response = service?.spreadsheets()?.create(spreadsheet)?.execute()
+            val sheetId = response?.spreadsheetId
+            val headers = listOf(DEFAULT_HEADERS)
             val headerBody = ValueRange().setValues(headers)
-            service.spreadsheets().values().update(sheetId, "Prospects!A1", headerBody).setValueInputOption("RAW").execute()
+            service?.spreadsheets()?.values()?.update(sheetId, "Prospects!A1", headerBody)?.setValueInputOption("RAW")?.execute()
             gC.consoleMessage.value = ConsoleMessage("✅ Feuille '$title' créée avec succès.", ConsoleMessageType.SUCCESS)
             return@withContext sheetId
         }
@@ -172,14 +169,11 @@ object GoogleSheetsHelper {
         if (spreadsheetId.isBlank()) return@withContext null
         try {
             val service = getSheetsService()
-            val metadata = service.spreadsheets().get(spreadsheetId).setFields("properties.title,sheets.properties.title").execute()
-            gC.consoleMessage.value = ConsoleMessage("✅ Métadonnées récupérées pour '${metadata.properties.title}'", ConsoleMessageType.SUCCESS)
+            val metadata = service?.spreadsheets()?.get(spreadsheetId)?.setFields("properties.title,sheets.properties.title")?.execute()
             return@withContext metadata
         }
-        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur récupération métadonnées ($spreadsheetId): ${e.message}", ConsoleMessageType.ERROR); null}
+        catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur de récupération des métadonnées. ($spreadsheetId): ${e.message}", ConsoleMessageType.ERROR); null}
     }
-    suspend fun checkCredentialsFileExists(): Boolean {
-        try {findClientSecrets(); return true}
-        catch (e: Exception) {return false}
-    }
+
+    suspend fun checkCredentialsFileExists(): Boolean {return try {findClientSecrets(); true} catch (e: Exception) {ConsoleMessage("❌ Erreur lors de la vérification du fichier de credentials : ${e.message}", ConsoleMessageType.ERROR); false}}
 }
