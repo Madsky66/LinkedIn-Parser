@@ -152,9 +152,18 @@ object GoogleSheetsHelper {
             gC.consoleMessage.value = ConsoleMessage("⏳ Création de la feuille '$title'...", ConsoleMessageType.INFO)
             val response = service?.spreadsheets()?.create(spreadsheet)?.execute()
             val sheetId = response?.spreadsheetId
-            val headers = listOf(DEFAULT_HEADERS)
+            val emptyRows = listOf(
+                listOf(listOf("", "", "", "", "", "", "", "")),  // A1-H1
+                listOf(listOf("", "", "", "", "", "", "", "")),  // A2-H2
+                listOf(listOf("", "", "", "", "", "", "", ""))   // A3-H3
+            )
+            for (i in 0..2) {
+                val emptyBody = ValueRange().setValues(emptyRows[i])
+                service?.spreadsheets()?.values()?.update(sheetId, "Prospects!A${i+1}", emptyBody)?.setValueInputOption("RAW")?.execute()
+            }
+            val headers = listOf(listOf("", "SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
             val headerBody = ValueRange().setValues(headers)
-            service?.spreadsheets()?.values()?.update(sheetId, "Prospects!A1", headerBody)?.setValueInputOption("RAW")?.execute()
+            service?.spreadsheets()?.values()?.update(sheetId, "Prospects!A4", headerBody)?.setValueInputOption("RAW")?.execute()
             gC.consoleMessage.value = ConsoleMessage("✅ Feuille '$title' créée avec succès.", ConsoleMessageType.SUCCESS)
             return@withContext sheetId
         }

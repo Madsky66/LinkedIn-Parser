@@ -1,76 +1,45 @@
 package ui.composable.modal
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.window.WindowDraggableArea
-import androidx.compose.material.Button
-import androidx.compose.material.Divider
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.OutlinedTextField
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.unit.DpSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.DialogWindow
-import androidx.compose.ui.window.rememberDialogState
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.*
+import androidx.compose.ui.window.*
 import ui.composable.effect.CustomOutlinedTextFieldColors
 import utils.getButtonColors
 import config.GlobalInstance.config as gC
 
 @Composable
 fun SheetsPickerModal(spreadsheets: List<Pair<String, String>>, onFileSelected: (String) -> Unit, onCreateNew: (String) -> Unit, onDismiss: () -> Unit) {
-    val dialogState = rememberDialogState(size = DpSize(500.dp, 400.dp))
+    val dialogState = rememberDialogState(size = DpSize(1280.dp, 720.dp))
     val newSheetName = remember {mutableStateOf("")}
     val showCreateNewSection = remember {mutableStateOf(false)}
     val darkGray = gC.darkGray.value
     val middleGray = gC.middleGray.value
     val lightGray = gC.lightGray.value
 
-    DialogWindow(onDismiss, dialogState, true, "Sélectionner une feuille Google Sheets", undecorated = true, resizable = true) {
+    DialogWindow(onDismiss, dialogState, true, "", undecorated = true, resizable = true) {
 
         Column() {
             // Barre de titre
             WindowDraggableArea(Modifier.fillMaxWidth().height(50.dp).background(darkGray)) {Row(Modifier.fillMaxSize()) {ModalTitleBar(gC, "Sélecteur Google Sheets", onDismiss)}}
             Surface(Modifier.fillMaxSize(), color = middleGray) {
                 Column(Modifier.fillMaxSize().padding(20.dp), Arrangement.spacedBy(20.dp)) {
-                    // Titre
-                    Text("Sélectionner une feuille Google Sheets", style = MaterialTheme.typography.h6, color = lightGray)
                     // Liste des feuilles disponibles
                     if (spreadsheets.isNotEmpty() && !showCreateNewSection.value) {
                         Text("Feuilles disponibles :", style = MaterialTheme.typography.subtitle1, color = lightGray)
-                        LazyColumn(Modifier.weight(1f).fillMaxWidth().border(1.dp, darkGray.copy(0.5f)).padding(8.dp)) {
-                            items(spreadsheets.size) {index ->
-                                val (id, name) = spreadsheets[index]
-                                Row(Modifier.fillMaxWidth().clickable {onFileSelected(id)}.padding(8.dp), Arrangement.spacedBy(8.dp), Alignment.CenterVertically) {
-                                    Icon(Icons.Filled.Description, null, tint = lightGray)
-                                    Text(name, color = lightGray)
-                                }
-                                Divider(color = darkGray.copy(0.3f))
-                            }
-                        }
-                        // Bouton pour créer une nouvelle feuille
+                        SheetsGrid(spreadsheets, onFileSelected)
                         Button({showCreateNewSection.value = true}, colors = getButtonColors(middleGray, darkGray, lightGray)) {
-                            Row(Modifier, Arrangement.spacedBy(8.dp), Alignment.CenterVertically) {
+                            Row(Modifier, Arrangement.spacedBy(10.dp), Alignment.CenterVertically) {
                                 Icon(Icons.Filled.Add, null)
                                 Text("Créer une nouvelle feuille")
                             }
@@ -86,18 +55,44 @@ fun SheetsPickerModal(spreadsheets: List<Pair<String, String>>, onFileSelected: 
                         }
                     }
                     else {
-                        // Aucune feuille disponible
                         Text("Aucune feuille Google Sheets disponible", style = MaterialTheme.typography.subtitle1, color = lightGray)
-                        // Section pour créer une nouvelle feuille
                         Text("Créer une nouvelle feuille :", style = MaterialTheme.typography.subtitle1, color = lightGray)
-                        //
                         OutlinedTextField(newSheetName.value, {newSheetName.value = it}, Modifier.fillMaxWidth(), label = {Text("Nom de la feuille")}, colors = CustomOutlinedTextFieldColors())
-                        //
                         Button({onCreateNew(newSheetName.value)}, Modifier.fillMaxWidth(), newSheetName.value.isNotBlank(), colors = getButtonColors(middleGray, darkGray, lightGray)) {Text("Créer")}
                     }
                     // Bouton d'annulation
                     Button(onDismiss, Modifier.align(Alignment.End), colors = getButtonColors(middleGray, darkGray, lightGray)) {Text("Annuler")}
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun SheetCard(id: String, name: String, onSelect: (String) -> Unit) {
+    Surface(Modifier.fillMaxWidth().height(120.dp).padding(10.dp).clip(RoundedCornerShape(10.dp)).clickable {onSelect(id)}, color = gC.darkGray.value.copy(0.3f), shape = RoundedCornerShape(10.dp)) {
+        Row(Modifier.fillMaxSize().padding(20.dp), Arrangement.Start, Alignment.CenterVertically) {
+            Icon(Icons.Filled.Description, null, Modifier.size(25.dp), tint = gC.lightGray.value)
+            Spacer(Modifier.width(10.dp))
+            Text(name, color = gC.lightGray.value, fontSize = 15.sp, style = MaterialTheme.typography.h6, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+fun ColumnScope.SheetsGrid(spreadsheets: List<Pair<String, String>>, onFileSelected: (String) -> Unit) {
+    LazyColumn(
+        Modifier.fillMaxWidth().weight(1f).padding(horizontal = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(spreadsheets.size / 4 + if (spreadsheets.size % 4 > 0) 1 else 0) {rowIndex ->
+            Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(10.dp)) {
+                val firstIndex = rowIndex * 4
+                val secondIndex = firstIndex + 1
+                val thirdIndex = firstIndex + 2
+                val fourthIndex = firstIndex + 3
+                Box(Modifier.weight(1f)) {if (firstIndex < spreadsheets.size) {val (id, name) = spreadsheets[firstIndex]; SheetCard(id, name, onFileSelected)}}
+                Box(Modifier.weight(1f)) {if (secondIndex < spreadsheets.size) {val (id, name) = spreadsheets[secondIndex]; SheetCard(id, name, onFileSelected)}}
+                Box(Modifier.weight(1f)) {if (thirdIndex < spreadsheets.size) {val (id, name) = spreadsheets[thirdIndex]; SheetCard(id, name, onFileSelected)}}
+                Box(Modifier.weight(1f)) {if (fourthIndex < spreadsheets.size) {val (id, name) = spreadsheets[fourthIndex]; SheetCard(id, name, onFileSelected)}}
             }
         }
     }
