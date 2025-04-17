@@ -14,7 +14,7 @@ class GoogleSheetsManager {
         val spreadsheetId = gC.googleSheetsId.value
         if (spreadsheetId.isEmpty()) {gC.consoleMessage.value = ConsoleMessage("❌ ID Google Sheets non défini. Impossible d'ajouter.", ConsoleMessageType.ERROR); return}
         val prospect = gC.currentProfile.value
-        if (prospect == null) {gC.consoleMessage.value = ConsoleMessage("ℹ️ Aucune donnée de profil à ajouter.", ConsoleMessageType.INFO); return}
+        if (prospect == null) {return}
         withContext(Dispatchers.IO) {
             try {
                 if (!gC.isLoggedIn.value && !GoogleSheetsHelper.login()) {gC.consoleMessage.value = ConsoleMessage("❌ Non connecté à Google. Impossible d'ajouter.", ConsoleMessageType.ERROR); return@withContext}
@@ -28,7 +28,7 @@ class GoogleSheetsManager {
                 var lastError: Exception? = null
                 for (attempt in 1..retryCount) {
                     try {
-                        sheetsService.spreadsheets().values().append(spreadsheetId, appendRange, body).setValueInputOption("RAW").setInsertDataOption("INSERT_ROWS").execute()
+                        sheetsService?.spreadsheets()?.values()?.append(spreadsheetId, appendRange, body)?.setValueInputOption("RAW")?.setInsertDataOption("INSERT_ROWS")?.execute()
                         success = true
                         break
                     }
@@ -52,15 +52,14 @@ class GoogleSheetsManager {
         }
     }
 
-    private fun ensureSheetExists(service: Sheets, spreadsheetId: String, sheetTitle: String): Boolean {
+    private fun ensureSheetExists(service: Sheets?, spreadsheetId: String, sheetTitle: String): Boolean {
         try {
-            val spreadsheet = service.spreadsheets().get(spreadsheetId).setFields("sheets.properties.title").execute()
-            val sheetExists = spreadsheet.sheets?.any { it.properties?.title == sheetTitle } ?: false
+            val spreadsheet = service?.spreadsheets()?.get(spreadsheetId)?.setFields("sheets.properties.title")?.execute()
+            val sheetExists = spreadsheet?.sheets?.any {it.properties?.title == sheetTitle} == true
             if (!sheetExists) {
                 val addSheetRequest = AddSheetRequest().setProperties(SheetProperties().setTitle(sheetTitle))
                 val batchUpdateRequest = BatchUpdateSpreadsheetRequest().setRequests(listOf(Request().setAddSheet(addSheetRequest)))
-                service.spreadsheets().batchUpdate(spreadsheetId, batchUpdateRequest).execute()
-                gC.consoleMessage.value = ConsoleMessage("ℹ️ Onglet '$sheetTitle' créé.", ConsoleMessageType.INFO)
+                service?.spreadsheets()?.batchUpdate(spreadsheetId, batchUpdateRequest)?.execute()
                 return true
             }
             return false
@@ -68,13 +67,12 @@ class GoogleSheetsManager {
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur vérification/création onglet '$sheetTitle': ${e.message}", ConsoleMessageType.ERROR); throw e}
     }
 
-    private suspend fun writeHeaders(service: Sheets, spreadsheetId: String, sheetTitle: String) {
+    private suspend fun writeHeaders(service: Sheets?, spreadsheetId: String, sheetTitle: String) {
         try {
             val headers = listOf(listOf("SOCIETE", "PRENOM", "NOM", "POSTE", "EMAIL", "TEL", "LINKEDIN"))
             val headerBody = ValueRange().setValues(headers)
             val headerRange = "$sheetTitle!A1"
-            service.spreadsheets().values().update(spreadsheetId, headerRange, headerBody).setValueInputOption("RAW").execute()
-            gC.consoleMessage.value = ConsoleMessage("ℹ️ En-têtes écrits dans '$sheetTitle'.", ConsoleMessageType.INFO)
+            service?.spreadsheets()?.values()?.update(spreadsheetId, headerRange, headerBody)?.setValueInputOption("RAW")?.execute()
         }
         catch (e: Exception) {gC.consoleMessage.value = ConsoleMessage("❌ Erreur écriture en-têtes '$sheetTitle': ${e.message}", ConsoleMessageType.ERROR)}
     }
