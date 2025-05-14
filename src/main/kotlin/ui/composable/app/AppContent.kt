@@ -46,7 +46,7 @@ fun ColumnScope.AppContent(applicationScope: CoroutineScope) {
             val clipboard = Toolkit.getDefaultToolkit().systemClipboard
             if (clipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {clipboardContent = clipboard.getData(DataFlavor.stringFlavor) as String}
             bot().changeApp()
-            if (!bot().detect(clipboard) {clipboardContent = it}) {gC.consoleMessage.value = ConsoleMessage("❌ Page de profil non détectée ou erreur de détection.", ConsoleMessageType.ERROR); return}
+            if (!bot().detect {clipboardContent = it}) {gC.consoleMessage.value = ConsoleMessage("❌ Page de profil non détectée ou erreur de détection.", ConsoleMessageType.ERROR); return}
             bot().changeApp()
             gC.consoleMessage.value = ConsoleMessage("⏳ Analyse du profil en cours...", ConsoleMessageType.INFO)
             gC.profileParser.processInput(applicationScope, clipboardContent)
