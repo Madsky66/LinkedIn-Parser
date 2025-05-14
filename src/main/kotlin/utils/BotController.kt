@@ -24,6 +24,11 @@ class BotController {
     private val robot = Robot()
     private val systemClipboard: Clipboard = Toolkit.getDefaultToolkit().systemClipboard
 
+    private fun logMessage(message: String, type: ConsoleMessageType) {
+        gC.consoleMessage.value = ConsoleMessage(message, type)
+        if (type == ConsoleMessageType.WARNING || type == ConsoleMessageType.ERROR) {System.err.println(message)}
+    }
+
     private suspend fun modifierAndKey(modifier: Int, key: Int, actionDelay: Long = SHORT_DELAY_MS) {
         robot.keyPress(modifier)
         robot.keyPress(key)
@@ -42,17 +47,12 @@ class BotController {
 
     private fun getClipboardText(): String {
         return try {if (systemClipboard.isDataFlavorAvailable(DataFlavor.stringFlavor)) {systemClipboard.getData(DataFlavor.stringFlavor) as? String ?: ""} else {""}}
-        catch (e: Exception) {
-            System.err.println("Erreur lors de la lecture du presse-papiers: ${e.message}")
-            gC.consoleMessage.value = ConsoleMessage("Erreur presse-papiers: ${e.message}", ConsoleMessageType.WARNING)
-            ""
-        }
+        catch (e: Exception) {logMessage("Erreur lors de la lecture du presse-papiers: ${e.message}", ConsoleMessageType.WARNING); ""}
     }
 
     private fun setClipboardText(text: String) {
         try {val stringSelection = StringSelection(text); systemClipboard.setContents(stringSelection, null)}
-        catch (e: Exception) {
-            System.err.println("Erreur lors de la définition du presse-papiers: ${e.message}"); gC.consoleMessage.value = ConsoleMessage("Erreur écriture presse-papiers: ${e.message}", ConsoleMessageType.WARNING)}
+        catch (e: Exception) {logMessage("Erreur lors de la définition du presse-papiers: ${e.message}", ConsoleMessageType.WARNING)}
     }
 
     private suspend fun copyPageContent(): String {
@@ -74,54 +74,44 @@ class BotController {
         modifierAndKey(CTRL_MODIFIER, KeyEvent.VK_C)
         delay(MEDIUM_DELAY_MS)
         val baseUrl = getClipboardText()
-        val newUrlCandidate: String
-        if (baseUrl.isNotBlank()) {if (baseUrl.contains("overlay/contact-info/", true)) {newUrlCandidate = baseUrl} else {val strippedBaseUrl = baseUrl.removeSuffix("/"); newUrlCandidate = "$strippedBaseUrl/overlay/contact-info/"}}
-        else {
-            System.err.println("Impossible de récupérer l'URL de base depuis le presse-papiers.")
-            gC.consoleMessage.value = ConsoleMessage("URL de base non récupérée", ConsoleMessageType.WARNING)
-            newUrlCandidate = ""
-        }
+        val newUrlCandidate = if (baseUrl.isBlank()) {logMessage("URL de base non récupérée", ConsoleMessageType.WARNING); ""}
+        else if (baseUrl.contains("overlay/contact-info/", ignoreCase = true)) {baseUrl}
+        else {"${baseUrl.removeSuffix("/")}/overlay/contact-info/"}
         if (newUrlCandidate.isNotBlank()) {
             setClipboardText(newUrlCandidate)
             delay(MEDIUM_DELAY_MS)
             modifierAndKey(CTRL_MODIFIER, KeyEvent.VK_V)
             delay(MEDIUM_DELAY_MS)
             pressAndReleaseKey(KeyEvent.VK_ENTER)
-            delay(INITIAL_PAGE_LOAD_DELAY_MS)
         }
         return newUrlCandidate
     }
 
-    suspend fun detect(onNewClipboardContent: (String) -> Unit): Boolean {
-        gC.consoleMessage.value = ConsoleMessage("ℹ️ Vérification initiale de la page...", ConsoleMessageType.INFO)
-        var clipboardContent = copyPageContent()
+    private suspend fun checkContentAndReport(successMessage: String, onNewClipboardContent: (String) -> Unit): Boolean {
+        val clipboardContent = copyPageContent()
         if (isContentLikelyProfile(clipboardContent)) {
-            gC.consoleMessage.value = ConsoleMessage("✅ Profil détecté sur la page actuelle.", ConsoleMessageType.SUCCESS)
+            logMessage(successMessage, ConsoleMessageType.SUCCESS)
             onNewClipboardContent(clipboardContent)
             return true
         }
+        return false
+    }
+
+    suspend fun detect(onNewClipboardContent: (String) -> Unit): Boolean {
+        logMessage("ℹ️ Vérification initiale de la page...", ConsoleMessageType.INFO)
+        if (checkContentAndReport("✅ Profil détecté sur la page actuelle.", onNewClipboardContent)) {return true}
         for (attempt in 1..MAX_DETECTION_ATTEMPTS) {
-            gC.consoleMessage.value = ConsoleMessage("⏳ Tentative de navigation et détection $attempt/$MAX_DETECTION_ATTEMPTS...", ConsoleMessageType.INFO)
+            logMessage("⏳ Tentative de navigation et détection $attempt/$MAX_DETECTION_ATTEMPTS...", ConsoleMessageType.INFO)
             navigateToContactInfoPage()
             delay(INITIAL_PAGE_LOAD_DELAY_MS)
-            clipboardContent = copyPageContent()
-            if (isContentLikelyProfile(clipboardContent)) {
-                gC.consoleMessage.value = ConsoleMessage("✅ Profil détecté après navigation (Tentative $attempt).", ConsoleMessageType.SUCCESS)
-                onNewClipboardContent(clipboardContent)
-                return true
-            }
+            if (checkContentAndReport("✅ Profil détecté après navigation (Tentative $attempt).", onNewClipboardContent)) {return true}
             for (extraDelayMs in SUBSEQUENT_CHECK_DELAYS_MS) {
-                gC.consoleMessage.value = ConsoleMessage("⏳ Attente supplémentaire ($extraDelayMs ms) et re-vérification (Tentative $attempt)...", ConsoleMessageType.INFO)
+                logMessage("⏳ Attente supplémentaire ($extraDelayMs ms) et re-vérification (Tentative $attempt)...", ConsoleMessageType.INFO)
                 delay(extraDelayMs)
-                clipboardContent = copyPageContent()
-                if (isContentLikelyProfile(clipboardContent)) {
-                    gC.consoleMessage.value = ConsoleMessage("✅ Profil détecté après attente supplémentaire (Tentative $attempt).", ConsoleMessageType.SUCCESS)
-                    onNewClipboardContent(clipboardContent)
-                    return true
-                }
+                if (checkContentAndReport("✅ Profil détecté après attente supplémentaire (Tentative $attempt).", onNewClipboardContent)) {return true}
             }
         }
-        gC.consoleMessage.value = ConsoleMessage("❌ La page de profil n'a pas été détectée après $MAX_DETECTION_ATTEMPTS tentatives.", ConsoleMessageType.ERROR)
+        logMessage("❌ La page de profil n'a pas été détectée après $MAX_DETECTION_ATTEMPTS tentatives.", ConsoleMessageType.ERROR)
         return false
     }
 
