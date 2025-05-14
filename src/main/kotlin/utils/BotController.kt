@@ -69,7 +69,7 @@ class BotController {
 
         val baseUrl = try {clipboard.getData(DataFlavor.stringFlavor) as? String ?: ""}
         catch (e: Exception) {println("Erreur de récupération d'URL : $e"); ""}
-        val newUrl = if (baseUrl.isNotBlank() && !baseUrl.contains("overlay/contact-info/")) {if (baseUrl.endsWith("/")) baseUrl + "overlay/contact-info/" else "$baseUrl/overlay/contact-info/"} else url
+        val newUrl = if (baseUrl.isNotBlank() && !baseUrl.contains("overlay/contact-info/")) {if (baseUrl.endsWith("/")) baseUrl + "overlay/contact-info/" else "$baseUrl/overlay/contact-info/"} else baseUrl
         val clipboardContent = java.awt.Toolkit.getDefaultToolkit().systemClipboard
         val stringSelection = java.awt.datatransfer.StringSelection(newUrl)
         clipboardContent.setContents(stringSelection, null)
